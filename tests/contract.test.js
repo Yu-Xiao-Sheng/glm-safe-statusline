@@ -124,3 +124,17 @@ test('SNAPSHOT_STATUS includes all error states', () => {
   assert.equal(SNAPSHOT_STATUS.SERVER_ERROR, 'server_error');
   assert.equal(SNAPSHOT_STATUS.INVALID_RESPONSE, 'invalid_response');
 });
+
+test('sanitizeSnapshot accepts new error statuses', () => {
+  const { sanitizeSnapshot } = require('../src/shared/schema');
+
+  const errorStatuses = [
+    'no_token', 'timeout', 'network_error', 'unauthorized',
+    'forbidden', 'client_error', 'server_error', 'invalid_response'
+  ];
+
+  for (const status of errorStatuses) {
+    const result = sanitizeSnapshot({ status });
+    assert.equal(result.status, status, `status ${status} should be valid`);
+  }
+});
