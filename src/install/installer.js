@@ -22,6 +22,11 @@ async function installProject(options = {}) {
   const rendererTarget = path.join(installDir, 'glm-safe-statusline.js');
   await fs.promises.copyFile(rendererSource, rendererTarget);
 
+  // Fix require paths for installed location
+  let scriptContent = await fs.promises.readFile(rendererTarget, 'utf8');
+  scriptContent = scriptContent.replace(/require\('\.\.\/src\//g, "require('./src/");
+  await fs.promises.writeFile(rendererTarget, scriptContent);
+
   // Write wrapper script
   const wrapperPath = path.join(binDir, 'glm-safe-statusline');
   await fs.promises.writeFile(wrapperPath, `#!/bin/sh
