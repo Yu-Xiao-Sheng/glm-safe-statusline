@@ -1,23 +1,19 @@
+# GLM Direct StatusLine
 
-# GLM Safe StatusLine
-
-本项目实现了一个面向 GLM 的 Claude Code 状态线方案：`renderer` 只负责渲染，`bridge` 独占额度采集和 secret 读取。状态线脚本本身不直接碰上游 key，也不直接请求 GLM quota API。
+A Claude Code status line that displays GLM quota information. The renderer directly requests quota data from the GLM API using your existing `ANTHROPIC_API_KEY` environment variable.
 
 ## Components
 
 - `bin/glm-safe-statusline.js`
-  Claude Code `statusLine` 入口。读取 `stdin`，向本地 bridge 请求脱敏快照，渲染 `Telemetry Rail`。
-- `bin/glm-safe-bridge.js`
-  本地 bridge daemon。读取 bridge 专属 secret，访问固定 GLM quota endpoint，缓存脱敏快照，并通过本地 socket 提供只读访问。
-- `bin/glm-safe-bridgectl.js`
-  本地控制命令，提供 `start | stop | status`。
+  Claude Code `statusLine` entry point. Reads stdin, detects runtime environment,
+  and if GLM, directly requests quota API and renders the Telemetry Rail.
+
 ## Runtime Model
 
-- `renderer` 不读取 `GLM` key
-- `renderer` 不直连上游 quota API
-- `bridge` 是唯一允许读取 credential 和访问上游 quota 的进程
-- `renderer <-> bridge` 默认通过 Unix socket 通信
-- Windows 环境下自动退化为 `127.0.0.1` TCP loopback
+- Renderer reads GLM token from `ANTHROPIC_API_KEY` environment variable
+- Renderer makes direct HTTP requests to GLM quota API
+- Request timeout is 3 seconds
+- On failure, displays specific error message
 
 ## One-Click Install
 
@@ -32,15 +28,6 @@ bash install.sh
 - 复制运行时文件到 `~/.local/share/glm-safe-statusline`
 - 写入命令入口到 `~/.local/bin`
 - 备份并更新 `~/.claude/settings.json`
-- 默认交互式提示输入 `GLM token`
-- 如果本地已配置 token，会尝试自动启动 bridge
-
-可选参数：
-
-```bash
-bash install.sh --skip-token
-bash install.sh --token "your-glm-token"
-```
 
 安装完成后，Claude Code 会直接使用：
 
@@ -48,62 +35,24 @@ bash install.sh --token "your-glm-token"
 ~/.local/bin/glm-safe-statusline
 ```
 
-如果你的 shell 里没有 `~/.local/bin`，只会影响手动执行命令，不影响 Claude Code 的 `statusLine`。
+## Environment Variables
 
-## Manual Setup
+The renderer requires the following environment variable:
 
-### 1. 配置 bridge secret
-
-推荐在启动 bridge 时注入专用环境变量：
-
-```bash
-export GLM_SAFE_BRIDGE_AUTH_TOKEN="your-glm-token"
-```
-
-也可以把配置写入：
-
-```text
-~/.glm-safe-statusline/bridge.config.json
-```
-
-示例：
-
-```json
-{
-  "authToken": "your-glm-token"
-}
-```
-
-### 2. 启动 bridge
-
-```bash
-node bin/glm-safe-bridgectl.js start
-node bin/glm-safe-bridgectl.js status
-```
-
-### 3. 配置 Claude Code statusLine
-
-`~/.claude/settings.json`:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "~/.local/bin/glm-safe-statusline"
-  }
-}
-```
+- `ANTHROPIC_API_KEY`: Your GLM API token
+  - Automatically available when Claude Code is configured for GLM
+  - No separate configuration needed
 
 ## Output Shape
 
-非 GLM 运行时只显示基础信息：
+### Non-GLM Runtime
 
 ```text
 claude-sonnet-4-6 | CTX 42% | 400.0 t/s
 demo-project | main
 ```
 
-GLM 运行时显示 `Telemetry Rail`：
+### GLM Runtime - Success
 
 ```text
 GLM-4.5 | CTX 34% | 218.0 t/s
@@ -113,13 +62,28 @@ MCP      | 680/1000 | fresh 14s
 glm-safe-statusline | feature/rail
 ```
 
-bridge 不可用时安全降级：
+### GLM Runtime - Error
 
 ```text
 GLM-4.5 | CTX 81%
-QUOTA    | quota unavailable
+QUOTA    | no token configured
 glm-safe-statusline | main
 ```
+
+## Error Messages
+
+When quota information is unavailable, the status line shows the specific reason:
+
+| Message | Cause |
+|---------|-------|
+| `no token configured` | `ANTHROPIC_API_KEY` is not set |
+| `network error` | Cannot reach GLM API |
+| `request timeout` | API request timed out (3s) |
+| `unauthorized` | Token is invalid (401) |
+| `forbidden` | Token lacks permission (403) |
+| `client error` | Other 4xx errors |
+| `server error` | GLM API is having issues (5xx) |
+| `invalid response` | Response parse failed |
 
 ## Tests
 
@@ -129,7 +93,6 @@ npm test
 
 ## Notes
 
-- 当前版本只支持 GLM
-- 当前版本没有浏览器面板
-- 当前版本没有多供应商抽象
-- 当前版本默认把 bridge runtime 文件放在 `~/.glm-safe-statusline/`
+- Current version only supports GLM
+- Current version does not have a browser panel
+- Current version does not have multi-provider abstraction
