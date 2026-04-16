@@ -49,6 +49,7 @@ function fetchQuotaSnapshot(config, options = {}) {
 
     const req = transport.get(quotaEndpoint, {
       headers: {
+        // GLM API expects token directly without Bearer prefix
         Authorization: authToken,
         Accept: 'application/json',
         'Accept-Language': 'en-US,en',
