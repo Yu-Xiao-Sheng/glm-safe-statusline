@@ -1,0 +1,14 @@
+{
+  "active": true,
+  "project_dir": "/home/yuxs/github_project/glm_code_plan_status_plugs",
+  "ov_conf": "/home/yuxs/.openviking/ov.conf",
+  "mode": "local",
+  "url": "",
+  "api_key": "",
+  "local_data_path": "/home/yuxs/github_project/glm_code_plan_status_plugs/data",
+  "session_id": "5239a12e-99af-4eb0-94dd-43e029be3575",
+  "last_turn_uuid": "a395e316-dd35-4a52-9bff-983fafc2acdb",
+  "ingested_turns": 15,
+  "started_at": 1776326382,
+  "last_ingested_at": 1776327942
+}

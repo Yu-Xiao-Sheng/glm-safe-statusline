@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>异常调用链审计报告</title>
+  <style>
+    :root {
+      --bg: #f5efe3;
+      --bg-strong: #efe3cf;
+      --paper: rgba(255, 252, 247, 0.92);
+      --ink: #1f2430;
+      --muted: #586173;
+      --line: rgba(60, 56, 48, 0.12);
+      --accent: #0d6f63;
+      --accent-soft: rgba(13, 111, 99, 0.12);
+      --warn: #a15c00;
+      --warn-soft: rgba(161, 92, 0, 0.14);
+      --high: #a42e2e;
+      --high-soft: rgba(164, 46, 46, 0.14);
+      --shadow: 0 18px 45px rgba(43, 37, 28, 0.12);
+      --radius: 22px;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(13, 111, 99, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(164, 46, 46, 0.08), transparent 30%),
+        linear-gradient(180deg, #f7f1e6 0%, #f2eadb 100%);
+      line-height: 1.65;
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 64px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 36px;
+      border-radius: 28px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(253, 247, 238, 0.96)),
+        linear-gradient(160deg, rgba(13, 111, 99, 0.08), rgba(164, 46, 46, 0.06));
+      border: 1px solid rgba(86, 76, 63, 0.1);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -12% -36% auto;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(13, 111, 99, 0.16), transparent 65%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(31, 36, 48, 0.06);
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+
+    h1 {
+      margin: 18px 0 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.15;
+    }
+
+    .lead {
+      max-width: 860px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .badge-row,
+    .grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .badge-row {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .grid {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .panel,
+    .metric {
+      border-radius: var(--radius);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      padding: 20px 22px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric .value {
+      margin-top: 10px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .metric .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .section {
+      margin-top: 22px;
+      padding: 26px;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .section > p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .callout-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .callout {
+      padding: 18px 18px 18px 20px;
+      border-radius: 18px;
+      border-left: 6px solid var(--accent);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .callout.high {
+      border-left-color: var(--high);
+      background: var(--high-soft);
+    }
+
+    .callout h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .callout p {
+      margin: 0;
+      color: var(--ink);
+    }
+
+    .timeline {
+      position: relative;
+      margin-top: 22px;
+      padding-left: 26px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(13, 111, 99, 0.38), rgba(164, 46, 46, 0.25));
+    }
+
+    .event {
+      position: relative;
+      margin-bottom: 18px;
+      padding: 0 0 0 18px;
+    }
+
+    .event:last-child {
+      margin-bottom: 0;
+    }
+
+    .event::before {
+      content: "";
+      position: absolute;
+      left: -22px;
+      top: 10px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 3px solid var(--accent);
+      box-shadow: 0 0 0 6px rgba(13, 111, 99, 0.08);
+    }
+
+    .event h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .event p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    .tag.low {
+      color: #145c50;
+      background: var(--accent-soft);
+    }
+
+    .tag.med {
+      color: #8a5208;
+      background: var(--warn-soft);
+    }
+
+    .tag.high {
+      color: #822020;
+      background: var(--high-soft);
+    }
+
+    .code,
+    code {
+      font-family: var(--mono);
+      font-size: 0.94em;
+    }
+
+    .code {
+      display: block;
+      margin-top: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      border-radius: 16px;
+      background: rgba(31, 36, 48, 0.94);
+      color: #f3f4f8;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      overflow: hidden;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    th,
+    td {
+      padding: 14px 16px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      background: rgba(31, 36, 48, 0.04);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .fact {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .fact h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .fact ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .fact li {
+      margin: 8px 0;
+      color: var(--muted);
+    }
+
+    .path {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(31, 36, 48, 0.06);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .evidence-list {
+      margin-top: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .evidence-item {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .evidence-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .small {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 720px) {
+      .wrap {
+        width: min(100% - 18px, 100%);
+      }
+
+      .hero,
+      .section {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">异常审计报告 · 生成日期 2026-04-16 · 目标会话 2026-04-15</div>
+      <h1>“＿日本 to=functions.exec_command …” 异常串审计结论</h1>
+      <p class="lead">
+        本报告基于目标会话日志、框架级运行日志以及当前本地落地检查结果，重建异常串的完整调用链。
+        结论是：该异常串更像一次工具调用协议文本泄漏或输出损坏，未见其落成真实的 <code>exec_command</code> 执行；
+        但同一会话内确实存在若干真实且高风险的行为，需要与该异常串本身分开判断。
+      </p>
+      <div class="badge-row">
+        <div class="metric">
+          <div class="label">异常串性质</div>
+          <div class="value">高概率为协议泄漏 / 输出损坏</div>
+          <div class="sub">原始异常首次出现于助手纯文本输出，不是结构化 <code>function_call</code></div>
+        </div>
+        <div class="metric">
+          <div class="label">是否真实执行</div>
+          <div class="value">未见对应执行证据</div>
+          <div class="sub">框架日志显示该 turn 仅有模型流开始与结束，没有对应 <code>ToolCall: exec_command</code></div>
+        </div>
+        <div class="metric">
+          <div class="label">本地木马迹象</div>
+          <div class="value">在已检查路径中未发现</div>
+          <div class="sub">未见相关进程、持久化、自启动或异常命中；安装目录与仓库内容一致</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section">
+      <h2>核心结论</h2>
+      <p>需要明确区分两类事实：一类是这条异常串本身，另一类是同会话内确实发生过的真实高风险动作。</p>
+      <div class="callout-list">
+        <div class="callout">
+          <h3>结论 1：异常串不是一次被记录下来的真实工具执行</h3>
+          <p>
+            在目标 turn 中，异常文本最早以助手消息直接输出，位于
+            <span class="path">/home/yuxs/.codex/sessions/2026/04/15/rollout-2026-04-15T18-50-33-019d90c3-a239-77b3-8982-a08773672409.jsonl:1154-1155</span>。
+            这一位置的记录类型是 <code>message</code>，不是 <code>function_call</code>。
+          </p>
+        </div>
+        <div class="callout warn">
+          <h3>结论 2：异常串内容高度像“本应内部可见的工具调用意图”被泄漏到了外层回复</h3>
+          <p>
+            文本里直接包含 <code>sed -n '1,260p' /home/yuxs/.codex/superpowers/skills/brainstorming/SKILL.md</code>，
+            这与会话稍早时一次正常的技能文件读取命令完全同型。最合理解释是协议层文本泄漏、输出拼接错误，或上游响应流被污染。
+          </p>
+        </div>
+        <div class="callout high">
+          <h3>结论 3：没有发现“日本 / 彩票 / 木马”相关本地程序落地证据，但会话本身存在真实高风险操作</h3>
+          <p>
+            当前本地安装目录、包装脚本、持久化位置和进程状态未发现与“日本”“彩票”等关键词相关的可执行落地。
+            但同一会话里确有高权限上下文、敏感配置入日志、使用本地 token 发外部请求、重启 bridge 等真实风险事件。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section">
+      <h2>异常调用链</h2>
+      <p>下列时间线只描述与本次异常串直接相关的链路，并把后续人工诊断性回显与原始异常区分开。</p>
+      <div class="timeline">
+        <div class="event">
+          <span class="tag high">高危上下文</span>
+          <h3>会话处于 <code>approval_policy: never</code> + <code>danger-full-access</code></h3>
+          <p>
+            目标会话在高权限模式下运行，意味着一旦真的形成工具调用，落地风险会显著放大。
+            证据位于
+            <span class="path">/home/yuxs/.codex/sessions/2026/04/15/rollout-2026-04-15T18-50-33-019d90c3-a239-77b3-8982-a08773672409.jsonl:5</span>。
+          </p>
+        </div>
+        <div class="event">
+          <span class="tag low">正常行为</span>
+          <h3>会话稍早确实存在一次合法的技能文件读取</h3>
+          <p>
+            日志中有正常的 <code>exec_command</code> 调用，读取
+            <code>brainstorming/SKILL.md</code>。
+            这为后续异常串中出现同类命令提供了来源线索。
+            证据位于
+            <span class="path">同一 session 日志:27-30</span>
+            与
+            <span class="path">/home/yuxs/.codex/log/codex-tui.log:176595</span>。
+          </p>
+        </div>
+        <div class="event">
+          <span class="tag low">上下文切换</span>
+          <h3>模型明确表示将按 <code>brainstorming</code> 处理</h3>
+          <p>
+            在异常发生前，代理已说明要使用 <code>brainstorming</code>。
+            证据位于
+            <span class="path">session 日志:1096</span>。
+          </p>
+        </div>
+        <div class="event">
+          <span class="tag med">原始异常</span>
+          <h3>用户回复“没问题”后，模型先输出正常设计段，再突然输出异常串</h3>
+          <p>
+            <span class="path">session 日志:1152-1153</span> 是正常的“第 2 个设计段”；
+            紧接着在
+            <span class="path">session 日志:1154-1155</span> 出现纯文本异常串：
+          </p>
+          <div class="code">＿日本 to=functions.exec_command &lt;中间为乱码/污染片段，详见原始日志&gt; code
+sed -n '1,260p' /home/yuxs/.codex/superpowers/skills/brainstorming/SKILL.md</div>
+        </div>
+        <div class="event">
+          <span class="tag low">关键排除</span>
+          <h3>框架级日志未记录该 turn 的真实工具执行</h3>
+          <p>
+            对应 turn <code>019d9453-cfaf-72f2-bd83-1c8232e737db</code> 在
+            <span class="path">/home/yuxs/.codex/log/codex-tui.log:183484-183517</span>
+            仅见模型流开始与结束，未见 <code>ToolCall: exec_command</code>。
+            这直接否定了“异常串就是一次已执行工具调用”的说法。
+          </p>
+        </div>
+        <div class="event">
+          <span class="tag low">后续回显</span>
+          <h3>后面还出现过一次同类字符串，但那是人工诊断性 <code>printf</code> 回显</h3>
+          <p>
+            在
+            <span class="path">session 日志:1170-1177</span>，
+            日志清楚显示先执行了 <code>printf</code>，再得到同类文本输出。
+            这不是第二次自发异常，只是后续调查动作。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section">
+      <h2>风险矩阵</h2>
+      <p>下表把“异常串本身”和“同会话内真实高风险动作”拆开评估。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>风险项</th>
+            <th>级别</th>
+            <th>证据</th>
+            <th>分析结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>高权限执行上下文</td>
+            <td><span class="tag high">严重</span></td>
+            <td><span class="path">session:5</span></td>
+            <td>真实存在。因为是 <code>approval_policy: never</code> 且 <code>danger-full-access</code>，任何被模型真正发起的命令都可直接落地。</td>
+          </tr>
+          <tr>
+            <td>敏感配置被直接写入会话日志</td>
+            <td><span class="tag high">严重</span></td>
+            <td><span class="path">session:1040</span>、<span class="path">session:1043</span></td>
+            <td>真实存在。<code>~/.claude/settings.json</code> 与 <code>~/.glm-safe-statusline/bridge.config.json</code> 的内容曾被直接输出到日志，应视为秘密暴露。</td>
+          </tr>
+          <tr>
+            <td>使用本地 token 对外发起 live 请求</td>
+            <td><span class="tag high">严重</span></td>
+            <td><span class="path">session:1055-1060</span></td>
+            <td>真实存在。Node heredoc 从 bridge 配置读取 token，并请求 <code>https://open.bigmodel.cn/api/monitor/usage/quota/limit</code>。这不是假象，而是实打实的外部网络动作。</td>
+          </tr>
+          <tr>
+            <td>重启 home 目录下已安装 bridge</td>
+            <td><span class="tag high">高</span></td>
+            <td><span class="path">session:1081-1087</span></td>
+            <td>真实存在。会话曾对用户 home 目录中的 <code>glm-safe-bridge</code> 做启动/状态操作，属于本地副作用。</td>
+          </tr>
+          <tr>
+            <td>仓库内执行 <code>rm -rf .superpowers</code></td>
+            <td><span class="tag med">中</span></td>
+            <td><span class="path">session:760-762</span></td>
+            <td>真实存在。影响范围目前看限于仓库目录，但依然是不经审批的破坏性删除。</td>
+          </tr>
+          <tr>
+            <td>“＿日本 to=functions.exec_command …” 异常串</td>
+            <td><span class="tag med">中</span></td>
+            <td><span class="path">session:1154-1155</span>、<span class="path">codex-tui.log:183484-183517</span></td>
+            <td>高概率是协议文本泄漏、输出损坏或上游响应污染。当前证据不支持“它已触发真实命令执行”。</td>
+          </tr>
+          <tr>
+            <td>本地仍残留 <code>bridge.config.json</code> 与陈旧 socket/pid</td>
+            <td><span class="tag med">中</span></td>
+            <td><span class="path">当前本地检查，2026-04-16</span></td>
+            <td>当前桥未运行，但状态目录残留仍在，且配置文件仍存在。它更像历史遗留和潜在敏感面，不像木马驻留。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="grid">
+      <section class="panel section">
+        <h2>本地落地检查</h2>
+        <p>以下是当前时点在本机上做的落地核查，目标是验证是否存在与该异常串相关的实际程序、持久化或篡改。</p>
+        <div class="stack">
+          <div class="fact">
+            <h3>进程状态</h3>
+            <ul>
+              <li>使用 <code>ps -ef | rg '/home/yuxs/.local/share/glm-safe-statusline|glm-safe-bridge|glm-safe-statusline|glm-safe-bridgectl'</code> 检查后，只命中审计命令自身，没有发现活动 bridge 进程。</li>
+              <li><code>~/.local/bin/glm-safe-bridgectl status</code> 返回 <code>Bridge is not running</code>。</li>
+              <li>状态目录里残留 <code>bridge.pid</code>，但对该 PID 执行 <code>ps -fp 3010777</code> 没有进程记录，判定为陈旧残留。</li>
+            </ul>
+          </div>
+          <div class="fact">
+            <h3>包装脚本与安装目录</h3>
+            <ul>
+              <li><code>~/.local/bin/glm-safe-statusline</code>、<code>glm-safe-bridge</code>、<code>glm-safe-bridgectl</code> 都是简短的 shell wrapper，只负责调用 <code>../share/glm-safe-statusline/bin/*.js</code>。</li>
+              <li>对比仓库与安装目录后，<code>diff -rq ./bin ~/.local/share/glm-safe-statusline/bin</code>、<code>diff -rq ./src ~/.local/share/glm-safe-statusline/src</code>、README、package.json 全部无差异。</li>
+            </ul>
+          </div>
+          <div class="fact">
+            <h3>异常串与关键词命中</h3>
+            <ul>
+              <li>对 <code>~/.local/bin</code>、<code>~/.local/share/glm-safe-statusline</code>、<code>~/.glm-safe-statusline</code> 进行关键词搜索，未找到 <code>日本</code>、<code>彩票</code>、<code>to=functions.exec_command</code> 或 <code>brainstorming/SKILL.md</code> 命中。</li>
+              <li>说明这些异常文本没有在当前检查到的本地安装路径中落地成脚本、配置或二进制。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>持久化与残留面</h2>
+        <p>这里检查的是“是否有木马式自启动或驻留”的常见位置，而不是业务功能是否合理。</p>
+        <div class="stack">
+          <div class="fact">
+            <h3>Shell 启动项</h3>
+            <ul>
+              <li>检查 <code>~/.bashrc</code>、<code>~/.zshrc</code>、<code>~/.profile</code>、<code>~/.xprofile</code> 后，没有发现与 <code>glm-safe</code> 相关的启动注入。</li>
+            </ul>
+          </div>
+          <div class="fact">
+            <h3>桌面 / systemd / cron</h3>
+            <ul>
+              <li><code>~/.config/systemd</code>、<code>~/.config/autostart</code>、<code>~/.local/share/applications</code> 未发现相关命中。</li>
+              <li><code>crontab -l</code> 检查也没有发现相关命中。</li>
+            </ul>
+          </div>
+          <div class="fact">
+            <h3>残留说明</h3>
+            <ul>
+              <li><code>~/.glm-safe-statusline</code> 当前仍有 <code>bridge.config.json</code>、空的 <code>bridge.log</code>、陈旧 <code>bridge.pid</code> 和 <code>bridge.sock</code>。</li>
+              <li>这更像历史运行残留，而不是当前仍在执行的木马驻留。若该 bridge 架构已废弃，建议清理并轮换相关 token。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel section">
+      <h2>为什么“日本”更像污染文本，而不像本地木马</h2>
+      <p>这个片段很突兀，但从现有证据看，它更像上游文本损坏，而不是本地程序注入。</p>
+      <div class="callout-list">
+        <div class="callout">
+          <h3>理由 1：它最早出现在助手文本层，而不是工具层</h3>
+          <p>如果是本地木马劫持并成功触发执行，日志通常会留下结构化 <code>function_call</code>、<code>exec_command_end</code> 或对应系统痕迹。这里没有。</p>
+        </div>
+        <div class="callout">
+          <h3>理由 2：异常串正文仍然指向合法的本地技能读取命令</h3>
+          <p>真正可疑的本地恶意程序通常会引入新路径、新域名或新可执行体；这里暴露出的反而是已有的技能文件读取命令。</p>
+        </div>
+        <div class="callout warn">
+          <h3>理由 3：唯一无法用本地证据排除的是“上游代理/中转响应被污染”</h3>
+          <p>你使用的是非官方中间代理服务。从原理上说，代理完全可能修改流式响应、插入伪结构文本，甚至伪造工具调用意图。
+          但对本次异常而言，当前证据只能证明“文本层异常”，不能证明“代理成功驱动本地执行”。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section">
+      <h2>证据索引</h2>
+      <p>以下索引可直接用于人工复核。为避免二次泄露，本报告不重印真实 secret 值。</p>
+      <div class="evidence-list">
+        <div class="evidence-item">
+          <strong>高权限会话上下文</strong>
+          <div class="small"><span class="path">/home/yuxs/.codex/sessions/2026/04/15/rollout-2026-04-15T18-50-33-019d90c3-a239-77b3-8982-a08773672409.jsonl:5</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>正常的技能读取工具调用</strong>
+          <div class="small"><span class="path">同一 session:27-30</span>；<span class="path">/home/yuxs/.codex/log/codex-tui.log:176595</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>代理声明将使用 brainstorming</strong>
+          <div class="small"><span class="path">同一 session:1096</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>原始异常串首次自发出现</strong>
+          <div class="small"><span class="path">同一 session:1152-1155</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>对应 turn 缺失真实 exec_command 工具执行</strong>
+          <div class="small"><span class="path">/home/yuxs/.codex/log/codex-tui.log:183484-183517</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>后续诊断性 printf 回显，不属于第二次自发异常</strong>
+          <div class="small"><span class="path">同一 session:1170-1177</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>敏感配置被打入日志</strong>
+          <div class="small"><span class="path">同一 session:1040</span>、<span class="path">同一 session:1043</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>使用本地 token 对外请求 quota 接口</strong>
+          <div class="small"><span class="path">同一 session:1055-1060</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>重启本地 bridge</strong>
+          <div class="small"><span class="path">同一 session:1081-1087</span></div>
+        </div>
+        <div class="evidence-item">
+          <strong>仓库内删除 .superpowers</strong>
+          <div class="small"><span class="path">同一 session:760-762</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section">
+      <h2>边界与后续建议</h2>
+      <p>下面这些是当前证据能做到和做不到的边界，以及我建议你立刻补的动作。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>主题</th>
+            <th>当前判断</th>
+            <th>建议动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>代理是否篡改响应</td>
+            <td>本地证据无法直接证明，也无法直接排除。</td>
+            <td>对同一请求分别走“代理”和“官方直连”抓取原始流式 chunk，逐包比对；必要时开 TLS 终点前抓包或记录 SDK 原始事件流。</td>
+          </tr>
+          <tr>
+            <td>本地是否有相关木马</td>
+            <td>在已检查路径中未发现活动进程、异常持久化或篡改安装目录。</td>
+            <td>若要继续扩大排查面，可再做系统级可执行文件基线、全盘近期修改时间扫描、网络连接侧审计和 root 级启动项核查。</td>
+          </tr>
+          <tr>
+            <td>已泄露 secret 的处置</td>
+            <td>风险真实且已发生。</td>
+            <td>立即轮换 <code>ANTHROPIC_AUTH_TOKEN</code> 与 bridge 相关 token；清理或加密保存 <code>bridge.config.json</code>；对历史日志执行访问控制。</td>
+          </tr>
+          <tr>
+            <td>遗留 bridge 残留</td>
+            <td>当前未运行，但状态目录残留仍在。</td>
+            <td>如果项目不再需要该桥接架构，删除 <code>~/.glm-safe-statusline</code> 残留文件，移除 <code>~/.local/bin</code> 对应入口，并重新确认 <code>~/.claude/settings.json</code> 的状态栏配置。</td>
+          </tr>
+          <tr>
+            <td>当前审计限制</td>
+            <td>本轮审计在受限沙箱中进行，像 <code>ss -xl</code> 这类 netlink 级检查不可用。</td>
+            <td>我已改用进程枚举、PID 校验、状态目录检查、持久化路径扫描和目录一致性比对来覆盖主要风险面。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="footer-note">
+        最终判断：这条“＿日本 to=functions.exec_command …”异常串，本身更像一次响应层协议文本泄漏或输出损坏，
+        目前没有证据表明它已经在本机上成功执行了对应命令；但同会话内存在其他真实高风险动作，尤其是秘密输出、外部请求和本地 bridge 操作，
+        这些都应被视为独立的安全事件处理。
+      </p>
+    </section>
+  </main>
+</body>
+</html>
