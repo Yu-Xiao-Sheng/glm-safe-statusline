@@ -1,120 +1,154 @@
+<div align="center">
+
 # GLM Direct StatusLine
 
-A Claude Code status line that displays GLM quota information. The renderer directly requests quota data from the GLM API using your existing `ANTHROPIC_API_KEY` environment variable.
+**A lightweight Claude Code status line for GLM quota monitoring**
 
-## Components
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-- `bin/glm-safe-statusline.js`
-  Claude Code `statusLine` entry point. Reads stdin, detects runtime environment,
-  and if GLM, directly requests quota API and renders the Telemetry Rail.
+</div>
 
-## Runtime Model
+---
 
-- Renderer reads GLM token from `ANTHROPIC_API_KEY` environment variable
-- Renderer makes direct HTTP requests to GLM quota API
-- Request timeout is 3 seconds
-- On failure, displays specific error message
+## ✨ Features
 
-## One-Click Install
+- 🚀 **Direct API Integration** - No background daemon required
+- ⚡ **Fast & Lightweight** - 3-second timeout, minimal resource usage
+- 🎯 **Smart Token Detection** - Automatically reads from Claude settings
+- 🛡️ **Error Handling** - Clear error messages for troubleshooting
+- ✅ **Well Tested** - Comprehensive test coverage
 
-适用于 `macOS/Linux`：
+## 📦 Installation
+
+### Quick Install (macOS/Linux)
 
 ```bash
 bash install.sh
 ```
 
-安装器会完成这些动作：
+The installer will:
+- Copy runtime files to `~/.local/share/glm-safe-statusline`
+- Create command entry at `~/.local/bin/glm-safe-statusline`
+- Update `~/.claude/settings.json` (with backup)
 
-- 复制运行时文件到 `~/.local/share/glm-safe-statusline`
-- 写入命令入口到 `~/.local/bin`
-- 备份并更新 `~/.claude/settings.json`
+### Manual Install
 
-安装完成后，Claude Code 会直接使用：
+```bash
+# Install dependencies
+npm install
 
-```text
-~/.local/bin/glm-safe-statusline
+# Link command globally
+npm link
 ```
 
-## Environment Variables
+## ⚙️ Configuration
 
-The renderer requires the following environment variable:
+The status line automatically detects your GLM token from:
 
-- `ANTHROPIC_API_KEY`: Your GLM API token
-  - Automatically available when Claude Code is configured for GLM
-  - No separate configuration needed
+1. **`~/.claude/settings.json`** (Priority)
+   ```json
+   {
+     "env": {
+       "ANTHROPIC_AUTH_TOKEN": "your-token-here"
+     }
+   }
+   ```
 
-## Output Shape
+2. **Environment Variable** (Fallback)
+   ```bash
+   export ANTHROPIC_API_KEY="your-token-here"
+   ```
 
-### Non-GLM Runtime
+No additional configuration needed when using Claude Code with GLM!
 
-```text
-claude-sonnet-4-6 | CTX 42% | 400.0 t/s
-demo-project | main
+## 📊 Output Examples
+
+### GLM Runtime - Normal
+
 ```
-
-### GLM Runtime - Success
-
-```text
 GLM-4.5 | CTX 34% | 218.0 t/s
 TOKEN 5H | █████░░░ | 62%
 PLAN     | PRO | reset 1h53m
 MCP      | 680/1000 | fresh 14s
-glm-safe-statusline | feature/rail
+my-project | main
 ```
 
 ### GLM Runtime - Error
 
-```text
+```
 GLM-4.5 | CTX 81%
 QUOTA    | no token configured
-glm-safe-statusline | main
+my-project | main
 ```
 
-## Error Messages
+### Non-GLM Runtime
 
-When quota information is unavailable, the status line shows the specific reason:
+```
+claude-sonnet-4-6 | CTX 42% | 400.0 t/s
+my-project | main
+```
 
-| Message | Cause |
-|---------|-------|
-| `no token configured` | `ANTHROPIC_API_KEY` is not set |
-| `network error` | Cannot reach GLM API |
-| `request timeout` | API request timed out (3s) |
-| `unauthorized` | Token is invalid (401) |
-| `forbidden` | Token lacks permission (403) |
-| `client error` | Other 4xx errors |
-| `server error` | GLM API is having issues (5xx) |
-| `invalid response` | Response parse failed |
+## 🔧 Troubleshooting
 
-## Upgrading from Bridge Version
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `no token configured` | Token not found | Check `~/.claude/settings.json` or set `ANTHROPIC_API_KEY` |
+| `network error` | Cannot reach GLM API | Check your internet connection |
+| `request timeout` | API request timed out (3s) | Try again, API may be slow |
+| `unauthorized` | Invalid token (401) | Verify your token is correct |
+| `forbidden` | Token lacks permission (403) | Check token permissions |
+| `client error` | Other 4xx errors | Check API endpoint configuration |
+| `server error` | GLM API issues (5xx) | Wait and try again later |
+| `invalid response` | Response parse failed | API may have changed, report issue |
 
-If you're upgrading from the bridge-based version:
-
-1. Run the new installer:
-   ```bash
-   bash install.sh
-   ```
-
-2. Stop any running bridge daemons (if present):
-   ```bash
-   glm-safe-bridgectl stop 2>/dev/null || true
-   ```
-
-3. Clean up old bridge files (optional):
-   ```bash
-   rm -rf ~/.glm-safe-statusline/
-   rm ~/.local/bin/glm-safe-bridgectl
-   ```
-
-The new version uses your existing `ANTHROPIC_API_KEY` and doesn't require separate bridge configuration.
-
-## Tests
+## 🧪 Testing
 
 ```bash
+# Run all tests
 npm test
+
+# Run with coverage
+npm run test:coverage
 ```
 
-## Notes
+## 🏗️ Architecture
 
-- Current version only supports GLM
-- Current version does not have a browser panel
-- Current version does not have multi-provider abstraction
+```
+src/
+├── renderer/
+│   ├── index.js      # Main entry point
+│   ├── render.js     # Status line rendering
+│   └── upstream.js   # Direct API client
+├── shared/
+│   ├── constants.js  # Error status constants
+│   └── runtime.js    # Provider detection
+tests/
+└── *.test.js         # Comprehensive tests
+```
+
+## 📝 Technical Details
+
+- **Runtime**: Node.js ≥ 18.0.0
+- **API Endpoint**: `https://open.bigmodel.cn/api/monitor/usage/quota/limit`
+- **Request Timeout**: 3 seconds
+- **Status Line Interface**: Claude Code `statusLine` command type
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+Built for the Claude Code community using GLM API.
