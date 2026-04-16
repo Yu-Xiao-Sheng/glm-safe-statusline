@@ -85,6 +85,28 @@ When quota information is unavailable, the status line shows the specific reason
 | `server error` | GLM API is having issues (5xx) |
 | `invalid response` | Response parse failed |
 
+## Upgrading from Bridge Version
+
+If you're upgrading from the bridge-based version:
+
+1. Run the new installer:
+   ```bash
+   bash install.sh
+   ```
+
+2. Stop any running bridge daemons (if present):
+   ```bash
+   glm-safe-bridgectl stop 2>/dev/null || true
+   ```
+
+3. Clean up old bridge files (optional):
+   ```bash
+   rm -rf ~/.glm-safe-statusline/
+   rm ~/.local/bin/glm-safe-bridgectl
+   ```
+
+The new version uses your existing `ANTHROPIC_API_KEY` and doesn't require separate bridge configuration.
+
 ## Tests
 
 ```bash
