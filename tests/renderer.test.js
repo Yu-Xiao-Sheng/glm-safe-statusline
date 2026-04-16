@@ -19,7 +19,7 @@ const rendererModule = tryRequire('../src/renderer/index');
 test('renderStatusLine keeps non-GLM runtime on the base layout', async () => {
   assert.equal(typeof rendererModule.renderStatusLine, 'function');
 
-  let bridgeCalls = 0;
+  let apiCalls = 0;
   const output = await rendererModule.renderStatusLine({
     stdin: {
       model: { display_name: 'claude-sonnet-4-6' },
@@ -38,14 +38,14 @@ test('renderStatusLine keeps non-GLM runtime on the base layout', async () => {
       ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
     },
     branch: 'main',
-    readBridgeSnapshot: async () => {
-      bridgeCalls += 1;
+    fetchQuotaSnapshot: async () => {
+      apiCalls += 1;
       return null;
     },
   });
 
   const plain = stripAnsi(output);
-  assert.equal(bridgeCalls, 0);
+  assert.equal(apiCalls, 0);
   assert.match(plain, /claude-sonnet-4-6/);
   assert.match(plain, /CTX 42%/);
   assert.match(plain, /400\.0 t\/s/);
@@ -73,10 +73,11 @@ test('renderStatusLine renders the telemetry rail for a fresh GLM snapshot', asy
     },
     env: {
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      ANTHROPIC_API_KEY: 'test-key',
     },
     branch: 'feature/rail',
     now: () => 1776297294000,
-    readBridgeSnapshot: async () => ({
+    fetchQuotaSnapshot: async () => ({
       status: 'fresh',
       plan_level: 'pro',
       token_usage_pct: 62,
@@ -116,10 +117,11 @@ test('renderStatusLine shows freshness hint for stale bridge data', async () => 
     },
     env: {
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      ANTHROPIC_API_KEY: 'test-key',
     },
     branch: 'main',
     now: () => 1776297400000,
-    readBridgeSnapshot: async () => ({
+    fetchQuotaSnapshot: async () => ({
       status: 'stale',
       plan_level: 'max',
       token_usage_pct: 80,
@@ -152,9 +154,10 @@ test('renderStatusLine degrades safely when the bridge is unavailable', async ()
     },
     env: {
       ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      ANTHROPIC_API_KEY: 'test-key',
     },
     branch: 'main',
-    readBridgeSnapshot: async () => {
+    fetchQuotaSnapshot: async () => {
       throw new Error('socket timeout');
     },
   });
@@ -194,4 +197,92 @@ test('fetchQuotaSnapshot requests GLM API directly', async () => {
   }, { transport: mockHttps });
 
   assert.equal(snapshot.status, 'fresh');
+});
+
+test('renderStatusLine uses ANTHROPIC_API_KEY for GLM', async () => {
+  const { renderStatusLine } = require('../src/renderer/index');
+
+  let capturedToken = null;
+
+  const stdin = {
+    model: { display_name: 'GLM-4.5' },
+    context_window: { used_percentage: 81 },
+  };
+
+  const output = await renderStatusLine({
+    stdin,
+    env: {
+      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+      ANTHROPIC_API_KEY: 'test-key-123',
+    },
+    branch: 'main',
+    fetchQuotaSnapshot: async (config) => {
+      capturedToken = config.authToken;
+      return { status: 'fresh', plan_level: 'pro', token_usage_pct: 45 };
+    },
+  });
+
+  assert.equal(capturedToken, 'test-key-123');
+  assert.ok(output.includes('GLM-4.5'));
+});
+
+test('mapErrorToStatus maps errors to correct status constants', async () => {
+  const { mapErrorToStatus } = require('../src/renderer/index');
+  const { SNAPSHOT_STATUS } = require('../src/shared/constants');
+
+  assert.equal(mapErrorToStatus(new Error('NO_TOKEN')), SNAPSHOT_STATUS.NO_TOKEN);
+  assert.equal(mapErrorToStatus(new Error('TIMEOUT')), SNAPSHOT_STATUS.TIMEOUT);
+  assert.equal(mapErrorToStatus(new Error('NETWORK_ERROR')), SNAPSHOT_STATUS.NETWORK_ERROR);
+  assert.equal(mapErrorToStatus(new Error('ECONNREFUSED')), SNAPSHOT_STATUS.NETWORK_ERROR);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_401')), SNAPSHOT_STATUS.UNAUTHORIZED);
+  assert.equal(mapErrorToStatus(new Error('401 Unauthorized')), SNAPSHOT_STATUS.UNAUTHORIZED);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_403')), SNAPSHOT_STATUS.FORBIDDEN);
+  assert.equal(mapErrorToStatus(new Error('403 Forbidden')), SNAPSHOT_STATUS.FORBIDDEN);
+  assert.equal(mapErrorToStatus(new Error('INVALID_RESPONSE')), SNAPSHOT_STATUS.INVALID_RESPONSE);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_500')), SNAPSHOT_STATUS.SERVER_ERROR);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_503')), SNAPSHOT_STATUS.SERVER_ERROR);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_400')), SNAPSHOT_STATUS.CLIENT_ERROR);
+  assert.equal(mapErrorToStatus(new Error('API_ERROR_429')), SNAPSHOT_STATUS.CLIENT_ERROR);
+  assert.equal(mapErrorToStatus(new Error('Unknown error')), SNAPSHOT_STATUS.UNAVAILABLE);
+});
+
+test('renderStatusLine handles NO_TOKEN when API key is missing', async () => {
+  const { renderStatusLine } = require('../src/renderer/index');
+
+  const output = await renderStatusLine({
+    stdin: {
+      model: { display_name: 'GLM-4.5' },
+      context_window: { used_percentage: 81 },
+    },
+    env: {
+      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+      // No ANTHROPIC_API_KEY
+    },
+    branch: 'main',
+  });
+
+  const plain = stripAnsi(output);
+  assert.match(plain, /no_token/);
+});
+
+test('renderStatusLine handles API errors gracefully', async () => {
+  const { renderStatusLine } = require('../src/renderer/index');
+
+  const output = await renderStatusLine({
+    stdin: {
+      model: { display_name: 'GLM-4.5' },
+      context_window: { used_percentage: 81 },
+    },
+    env: {
+      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+      ANTHROPIC_API_KEY: 'test-key',
+    },
+    branch: 'main',
+    fetchQuotaSnapshot: async () => {
+      throw new Error('API_ERROR_401');
+    },
+  });
+
+  const plain = stripAnsi(output);
+  assert.match(plain, /unauthorized/);
 });

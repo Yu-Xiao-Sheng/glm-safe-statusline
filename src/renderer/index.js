@@ -1,10 +1,9 @@
 const { execSync } = require('node:child_process');
-const net = require('node:net');
 
 const { detectProviderRuntime } = require('../shared/runtime');
-const { sanitizeSnapshot } = require('../shared/schema');
-const { getSocketConfig } = require('../shared/socket');
 const { renderStatusOutput } = require('./render');
+const { fetchQuotaSnapshot } = require('./upstream');
+const { SNAPSHOT_STATUS } = require('../shared/constants');
 
 function parseJsonInput(inputText) {
   if (!inputText) {
@@ -27,52 +26,35 @@ function getGitBranch() {
   }
 }
 
-function readBridgeSnapshot(options = {}) {
-  const socketConfig = options.socketConfig || getSocketConfig();
-  const timeoutMs = options.timeoutMs || 150;
+function mapErrorToStatus(error) {
+  const message = error.message || '';
 
-  return new Promise((resolve, reject) => {
-    const client = socketConfig.mode === 'unix'
-      ? net.createConnection(socketConfig.socketPath)
-      : net.createConnection(socketConfig.port, socketConfig.host);
-    let buffer = '';
-    let settled = false;
+  if (message === 'NO_TOKEN') {
+    return SNAPSHOT_STATUS.NO_TOKEN;
+  }
+  if (message === 'TIMEOUT') {
+    return SNAPSHOT_STATUS.TIMEOUT;
+  }
+  if (message === 'NETWORK_ERROR' || message.includes('ECONNREFUSED')) {
+    return SNAPSHOT_STATUS.NETWORK_ERROR;
+  }
+  if (message.includes('401') || message.includes('API_ERROR_401')) {
+    return SNAPSHOT_STATUS.UNAUTHORIZED;
+  }
+  if (message.includes('403') || message.includes('API_ERROR_403')) {
+    return SNAPSHOT_STATUS.FORBIDDEN;
+  }
+  if (message === 'INVALID_RESPONSE') {
+    return SNAPSHOT_STATUS.INVALID_RESPONSE;
+  }
+  if (message.includes('API_ERROR_5')) {
+    return SNAPSHOT_STATUS.SERVER_ERROR;
+  }
+  if (message.includes('API_ERROR_4')) {
+    return SNAPSHOT_STATUS.CLIENT_ERROR;
+  }
 
-    function finish(error, value) {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      client.destroy();
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(value);
-    }
-
-    client.setEncoding('utf8');
-    client.setTimeout(timeoutMs, () => {
-      finish(new Error('bridge timeout'));
-    });
-    client.on('connect', () => {
-      client.write(JSON.stringify({ type: 'get_snapshot' }) + '\n');
-    });
-    client.on('data', (chunk) => {
-      buffer += chunk;
-      if (!buffer.includes('\n')) {
-        return;
-      }
-
-      const line = buffer.slice(0, buffer.indexOf('\n')).trim();
-      try {
-        finish(null, sanitizeSnapshot(JSON.parse(line)));
-      } catch (error) {
-        finish(error);
-      }
-    });
-    client.on('error', finish);
-  });
+  return SNAPSHOT_STATUS.UNAVAILABLE;
 }
 
 async function renderStatusLine(options = {}) {
@@ -84,15 +66,19 @@ async function renderStatusLine(options = {}) {
   let snapshot = null;
 
   if (provider.isGlm) {
-    try {
-      snapshot = await (options.readBridgeSnapshot || readBridgeSnapshot)({
-        socketConfig: options.socketConfig,
-        timeoutMs: options.timeoutMs,
-      });
-    } catch {
-      snapshot = {
-        status: 'unavailable',
-      };
+    const apiKey = env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      snapshot = { status: SNAPSHOT_STATUS.NO_TOKEN };
+    } else {
+      try {
+        snapshot = await (options.fetchQuotaSnapshot || fetchQuotaSnapshot)({
+          authToken: apiKey,
+          requestTimeoutMs: 3000,
+        });
+      } catch (error) {
+        snapshot = { status: mapErrorToStatus(error) };
+      }
     }
   }
 
@@ -129,6 +115,6 @@ module.exports = {
   getGitBranch,
   main,
   parseJsonInput,
-  readBridgeSnapshot,
   renderStatusLine,
+  mapErrorToStatus,
 };
