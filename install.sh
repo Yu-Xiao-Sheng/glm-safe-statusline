@@ -1,46 +1,52 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/bash
+set -e
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-SKIP_TOKEN=0
-TOKEN=""
+INSTALL_DIR="$HOME/.local/share/glm-safe-statusline"
+BIN_DIR="$HOME/.local/bin"
+SETTINGS_FILE="$HOME/.claude/settings.json"
 
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --skip-token)
-      SKIP_TOKEN=1
-      shift
-      ;;
-    --token)
-      TOKEN="${2:-}"
-      shift 2
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      exit 1
-      ;;
-  esac
-done
+echo "Installing GLM Safe StatusLine..."
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "Node.js is required but was not found in PATH." >&2
-  exit 1
-fi
+# Create directories
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$BIN_DIR"
 
-if [ "$SKIP_TOKEN" -ne 1 ] && [ -z "$TOKEN" ] && [ -t 0 ]; then
-  printf 'Enter GLM token now. Leave empty to skip: '
-  stty -echo
-  IFS= read -r TOKEN
-  stty echo
-  printf '\n'
-fi
+# Copy renderer
+cp bin/glm-safe-statusline.js "$INSTALL_DIR/"
 
-if [ "$SKIP_TOKEN" -eq 1 ]; then
-  exec node "$SCRIPT_DIR/scripts/install.js" --source-dir "$SCRIPT_DIR" --skip-token
-fi
+# Create wrapper
+cat > "$BIN_DIR/glm-safe-statusline" <<'EOF'
+#!/bin/sh
+exec node "$INSTALL_DIR/glm-safe-statusline.js" "$@"
+EOF
+chmod +x "$BIN_DIR/glm-safe-statusline"
 
-if [ -n "$TOKEN" ]; then
-  exec node "$SCRIPT_DIR/scripts/install.js" --source-dir "$SCRIPT_DIR" --token "$TOKEN"
-fi
+# Update Claude settings
+node -e "
+const fs = require('fs');
+const path = require('path');
 
-exec node "$SCRIPT_DIR/scripts/install.js" --source-dir "$SCRIPT_DIR" --skip-token
+let settings = {};
+const settingsPath = '$SETTINGS_FILE';
+
+if (fs.existsSync(settingsPath)) {
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (e) {}
+}
+
+// Backup
+if (fs.existsSync(settingsPath)) {
+  fs.copyFileSync(settingsPath, settingsPath + '.backup.' + Date.now());
+}
+
+settings.statusLine = {
+  type: 'command',
+  command: path.join('$BIN_DIR', 'glm-safe-statusline')
+};
+
+fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+"
+
+echo "Installation complete!"
+echo "Status line command: $BIN_DIR/glm-safe-statusline"
