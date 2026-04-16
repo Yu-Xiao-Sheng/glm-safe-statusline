@@ -171,9 +171,15 @@ test('renderStatusLine degrades safely when the bridge is unavailable', async ()
 test('fetchQuotaSnapshot requests GLM API directly', async () => {
   const { fetchQuotaSnapshot } = require('../src/renderer/upstream');
 
+  // Capture auth header for verification
+  let capturedAuthHeader = null;
+
   // Mock https module
   const mockHttps = {
     get: (url, options, callback) => {
+      // Verify Authorization header is set correctly
+      capturedAuthHeader = options.headers.Authorization;
+
       // Simulate successful response
       const mockRes = {
         setEncoding: () => {},
@@ -196,6 +202,8 @@ test('fetchQuotaSnapshot requests GLM API directly', async () => {
     quotaEndpoint: 'https://open.bigmodel.cn/api/monitor/usage/quota/limit',
   }, { transport: mockHttps });
 
+  // Verify auth header
+  assert.equal(capturedAuthHeader, 'test-token');
   assert.equal(snapshot.status, 'fresh');
 });
 
