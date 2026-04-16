@@ -11,6 +11,9 @@ echo "Installing GLM Safe StatusLine..."
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$BIN_DIR"
 
+# Copy src directory (all dependencies)
+cp -r src "$INSTALL_DIR/"
+
 # Copy renderer
 cp bin/glm-safe-statusline.js "$INSTALL_DIR/"
 

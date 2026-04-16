@@ -12,6 +12,11 @@ async function installProject(options = {}) {
   await fs.promises.mkdir(installDir, { recursive: true });
   await fs.promises.mkdir(binDir, { recursive: true });
 
+  // Copy src directory (contains all dependencies)
+  const srcSource = path.join(__dirname, '..', '..', 'src');
+  const srcTarget = path.join(installDir, 'src');
+  await copyDirectory(srcSource, srcTarget);
+
   // Copy renderer script
   const rendererSource = path.join(__dirname, '..', '..', 'bin', 'glm-safe-statusline.js');
   const rendererTarget = path.join(installDir, 'glm-safe-statusline.js');
@@ -64,7 +69,24 @@ async function mergeClaudeSettings(options = {}) {
   await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 }
 
+async function copyDirectory(src, dest) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  const entries = await fs.promises.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirectory(srcPath, destPath);
+    } else {
+      await fs.promises.copyFile(srcPath, destPath);
+    }
+  }
+}
+
 module.exports = {
   installProject,
   mergeClaudeSettings,
+  copyDirectory,
 };
