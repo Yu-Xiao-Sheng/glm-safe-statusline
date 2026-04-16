@@ -164,3 +164,34 @@ test('renderStatusLine degrades safely when the bridge is unavailable', async ()
   assert.match(plain, /quota unavailable/i);
   assert.match(plain, /glm-safe-statusline/);
 });
+
+test('fetchQuotaSnapshot requests GLM API directly', async () => {
+  const { fetchQuotaSnapshot } = require('../src/renderer/upstream');
+
+  // Mock https module
+  const mockHttps = {
+    get: (url, options, callback) => {
+      // Simulate successful response
+      const mockRes = {
+        setEncoding: () => {},
+        on: (event, handler) => {
+          if (event === 'data') {
+            handler(JSON.stringify({ code: 200, data: { level: 'pro', limits: [] } }));
+          }
+          if (event === 'end') {
+            handler();
+          }
+        },
+      };
+      callback(mockRes);
+      return { on: () => {}, setTimeout: () => {} };
+    },
+  };
+
+  const snapshot = await fetchQuotaSnapshot({
+    authToken: 'test-token',
+    quotaEndpoint: 'https://open.bigmodel.cn/api/monitor/usage/quota/limit',
+  }, { transport: mockHttps });
+
+  assert.equal(snapshot.status, 'fresh');
+});
