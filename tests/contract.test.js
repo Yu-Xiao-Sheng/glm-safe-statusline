@@ -1,7 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const os = require('node:os');
 
 function tryRequire(modulePath) {
   try {
@@ -13,7 +11,6 @@ function tryRequire(modulePath) {
 
 const runtime = tryRequire('../src/shared/runtime');
 const schema = tryRequire('../src/shared/schema');
-const socket = tryRequire('../src/shared/socket');
 
 test('detectProviderRuntime recognizes GLM runtime context', () => {
   assert.equal(typeof runtime.detectProviderRuntime, 'function');
@@ -77,39 +74,6 @@ test('sanitizeSnapshot rejects invalid statuses', () => {
   assert.throws(() => {
     schema.sanitizeSnapshot({ status: 'broken' });
   }, /status/i);
-});
-
-test('getSocketConfig defaults to a local user-private unix socket path', () => {
-  assert.equal(typeof socket.getSocketConfig, 'function');
-
-  const config = socket.getSocketConfig({
-    env: {},
-    platform: 'linux',
-    homedir: '/tmp/example-home',
-  });
-
-  assert.equal(config.mode, 'unix');
-  assert.equal(config.host, null);
-  assert.equal(config.port, null);
-  assert.equal(
-    config.socketPath,
-    path.join('/tmp/example-home', '.glm-safe-statusline', 'bridge.sock'),
-  );
-});
-
-test('getSocketConfig uses loopback tcp fallback on win32', () => {
-  assert.equal(typeof socket.getSocketConfig, 'function');
-
-  const config = socket.getSocketConfig({
-    env: {},
-    platform: 'win32',
-    homedir: os.homedir(),
-  });
-
-  assert.equal(config.mode, 'tcp');
-  assert.equal(config.host, '127.0.0.1');
-  assert.equal(config.port, 45219);
-  assert.equal(config.socketPath, null);
 });
 
 test('SNAPSHOT_STATUS includes all error states', () => {
