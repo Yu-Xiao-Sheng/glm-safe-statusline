@@ -1,4 +1,6 @@
 const { execSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { detectProviderRuntime } = require('../shared/runtime');
 const { renderStatusOutput } = require('./render');
@@ -15,6 +17,20 @@ function parseJsonInput(inputText) {
   } catch {
     return {};
   }
+}
+
+function getClaudeSettings() {
+  try {
+    const settingsPath = path.join(process.env.HOME, '.claude', 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const content = fs.readFileSync(settingsPath, 'utf8');
+      const settings = JSON.parse(content);
+      return settings.env || {};
+    }
+  } catch {
+    // Ignore errors
+  }
+  return {};
 }
 
 function getGitBranch() {
@@ -66,7 +82,8 @@ async function renderStatusLine(options = {}) {
   let snapshot = null;
 
   if (provider.isGlm) {
-    const apiKey = env.ANTHROPIC_API_KEY;
+    const claudeSettings = getClaudeSettings();
+    const apiKey = claudeSettings.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       snapshot = { status: SNAPSHOT_STATUS.NO_TOKEN };

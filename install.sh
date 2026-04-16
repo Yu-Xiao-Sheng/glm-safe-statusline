@@ -18,9 +18,9 @@ cp -r src "$INSTALL_DIR/"
 cp bin/glm-safe-statusline.js "$INSTALL_DIR/"
 
 # Create wrapper
-cat > "$BIN_DIR/glm-safe-statusline" <<'EOF'
+cat > "$BIN_DIR/glm-safe-statusline" <<EOF
 #!/bin/sh
-exec node "$INSTALL_DIR/glm-safe-statusline.js" "$@"
+exec node "$INSTALL_DIR/glm-safe-statusline.js" "\$@"
 EOF
 chmod +x "$BIN_DIR/glm-safe-statusline"
 
@@ -52,18 +52,10 @@ fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 "
 
 # Fix require paths in installed script
-node -e "
-const fs = require('fs');
-const path = require('path');
-const scriptPath = '$INSTALL_DIR/glm-safe-statusline.js';
-let content = fs.readFileSync(scriptPath, 'utf8');
-content = content.replace(/require\\(\\.\\.\\//src\\//g, 'require(\\\"./src/\\"');
-fs.writeFileSync(scriptPath, content);
-console.log('Fixed require paths');
-"
+node ~/.local/bin/fix-paths.js
 
 echo "Installation complete!"
 echo "Status line command: $BIN_DIR/glm-safe-statusline"
 echo ""
-echo "Note: The status line requires ANTHROPIC_API_KEY environment variable"
+echo "Note: The status line reads ANTHROPIC_AUTH_TOKEN from ~/.claude/settings.json"
 echo "      This should be automatically available when using GLM in Claude Code"

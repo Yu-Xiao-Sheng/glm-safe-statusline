@@ -208,30 +208,88 @@ test('fetchQuotaSnapshot requests GLM API directly', async () => {
 });
 
 test('renderStatusLine uses ANTHROPIC_API_KEY for GLM', async () => {
-  const { renderStatusLine } = require('../src/renderer/index');
+  const fs = require('fs');
+  const originalReadFileSync = fs.readFileSync;
 
-  let capturedToken = null;
-
-  const stdin = {
-    model: { display_name: 'GLM-4.5' },
-    context_window: { used_percentage: 81 },
+  // Mock fs.readFileSync to return empty settings (no ANTHROPIC_AUTH_TOKEN)
+  fs.readFileSync = (path, ...args) => {
+    if (String(path).includes('settings.json')) {
+      return JSON.stringify({ env: {} });
+    }
+    return originalReadFileSync(path, ...args);
   };
 
-  const output = await renderStatusLine({
-    stdin,
-    env: {
-      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
-      ANTHROPIC_API_KEY: 'test-key-123',
-    },
-    branch: 'main',
-    fetchQuotaSnapshot: async (config) => {
-      capturedToken = config.authToken;
-      return { status: 'fresh', plan_level: 'pro', token_usage_pct: 45 };
-    },
-  });
+  try {
+    const { renderStatusLine } = require('../src/renderer/index');
 
-  assert.equal(capturedToken, 'test-key-123');
-  assert.ok(output.includes('GLM-4.5'));
+    let capturedToken = null;
+
+    const stdin = {
+      model: { display_name: 'GLM-4.5' },
+      context_window: { used_percentage: 81 },
+    };
+
+    const output = await renderStatusLine({
+      stdin,
+      env: {
+        ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+        ANTHROPIC_API_KEY: 'test-key-123',
+      },
+      branch: 'main',
+      fetchQuotaSnapshot: async (config) => {
+        capturedToken = config.authToken;
+        return { status: 'fresh', plan_level: 'pro', token_usage_pct: 45 };
+      },
+    });
+
+    assert.equal(capturedToken, 'test-key-123');
+    assert.ok(output.includes('GLM-4.5'));
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
+});
+
+test('renderStatusLine prioritizes ANTHROPIC_AUTH_TOKEN from settings', async () => {
+  const fs = require('fs');
+  const originalReadFileSync = fs.readFileSync;
+
+  // Mock fs.readFileSync to return settings with ANTHROPIC_AUTH_TOKEN
+  fs.readFileSync = (path, ...args) => {
+    if (String(path).includes('settings.json')) {
+      return JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'settings-token-456' } });
+    }
+    return originalReadFileSync(path, ...args);
+  };
+
+  try {
+    const { renderStatusLine } = require('../src/renderer/index');
+
+    let capturedToken = null;
+
+    const stdin = {
+      model: { display_name: 'GLM-4.5' },
+      context_window: { used_percentage: 81 },
+    };
+
+    const output = await renderStatusLine({
+      stdin,
+      env: {
+        ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+        ANTHROPIC_API_KEY: 'env-token-123', // This should be ignored
+      },
+      branch: 'main',
+      fetchQuotaSnapshot: async (config) => {
+        capturedToken = config.authToken;
+        return { status: 'fresh', plan_level: 'pro', token_usage_pct: 45 };
+      },
+    });
+
+    // Should use ANTHROPIC_AUTH_TOKEN from settings, not ANTHROPIC_API_KEY from env
+    assert.equal(capturedToken, 'settings-token-456');
+    assert.ok(output.includes('GLM-4.5'));
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
 });
 
 test('mapErrorToStatus maps errors to correct status constants', async () => {
@@ -255,22 +313,37 @@ test('mapErrorToStatus maps errors to correct status constants', async () => {
 });
 
 test('renderStatusLine handles NO_TOKEN when API key is missing', async () => {
-  const { renderStatusLine } = require('../src/renderer/index');
+  const fs = require('fs');
+  const originalReadFileSync = fs.readFileSync;
 
-  const output = await renderStatusLine({
-    stdin: {
-      model: { display_name: 'GLM-4.5' },
-      context_window: { used_percentage: 81 },
-    },
-    env: {
-      ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
-      // No ANTHROPIC_API_KEY
-    },
-    branch: 'main',
-  });
+  // Mock fs.readFileSync to return empty settings (no ANTHROPIC_AUTH_TOKEN)
+  fs.readFileSync = (path, ...args) => {
+    if (String(path).includes('settings.json')) {
+      return JSON.stringify({ env: {} });
+    }
+    return originalReadFileSync(path, ...args);
+  };
 
-  const plain = stripAnsi(output);
-  assert.match(plain, /no token configured/);
+  try {
+    const { renderStatusLine } = require('../src/renderer/index');
+
+    const output = await renderStatusLine({
+      stdin: {
+        model: { display_name: 'GLM-4.5' },
+        context_window: { used_percentage: 81 },
+      },
+      env: {
+        ANTHROPIC_BASE_URL: 'https://open.bigmodel.cn/v1',
+        // No ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
+      },
+      branch: 'main',
+    });
+
+    const plain = stripAnsi(output);
+    assert.match(plain, /no token configured/);
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
 });
 
 test('renderStatusLine handles API errors gracefully', async () => {
