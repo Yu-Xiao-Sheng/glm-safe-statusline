@@ -81,6 +81,22 @@ function getWorkspaceName(stdin) {
   return currentDir ? path.basename(currentDir) : '';
 }
 
+function getErrorMessage(snapshot) {
+  const messages = {
+    no_token: 'no token configured',
+    timeout: 'request timeout',
+    network_error: 'network error',
+    unauthorized: 'unauthorized',
+    forbidden: 'forbidden',
+    client_error: 'client error',
+    server_error: 'server error',
+    invalid_response: 'invalid response',
+    unavailable: 'quota unavailable',
+  };
+
+  return messages[snapshot.status] || 'quota unavailable';
+}
+
 function buildBaseParts(stdin) {
   const parts = [];
   const model = stdin.model?.display_name;
@@ -130,8 +146,14 @@ function renderStatusOutput(options) {
   }
 
   if (provider.isGlm) {
-    if (!snapshot || snapshot.status === 'unavailable') {
-      lines.push(colorize(RED, 'QUOTA    | quota unavailable'));
+    const errorStatuses = [
+      'no_token', 'timeout', 'network_error', 'unauthorized',
+      'forbidden', 'client_error', 'server_error', 'invalid_response',
+    ];
+
+    if (!snapshot || snapshot.status === 'unavailable' || errorStatuses.includes(snapshot.status)) {
+      const errorMsg = snapshot ? getErrorMessage(snapshot) : 'quota unavailable';
+      lines.push(colorize(RED, `QUOTA    | ${errorMsg}`));
     } else {
       const tokenPct = snapshot.token_usage_pct ?? 0;
       const railColor = colorForPercentage(tokenPct);
@@ -166,4 +188,5 @@ module.exports = {
   buildBaseParts,
   getThroughput,
   renderStatusOutput,
+  getErrorMessage,
 };

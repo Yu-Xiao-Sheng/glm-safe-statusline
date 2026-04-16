@@ -262,7 +262,7 @@ test('renderStatusLine handles NO_TOKEN when API key is missing', async () => {
   });
 
   const plain = stripAnsi(output);
-  assert.match(plain, /no_token/);
+  assert.match(plain, /no token configured/);
 });
 
 test('renderStatusLine handles API errors gracefully', async () => {
@@ -285,4 +285,34 @@ test('renderStatusLine handles API errors gracefully', async () => {
 
   const plain = stripAnsi(output);
   assert.match(plain, /unauthorized/);
+});
+
+test('renderStatusOutput shows specific error messages', () => {
+  const { renderStatusOutput } = renderModule;
+
+  const errorCases = [
+    { status: 'no_token', expected: 'no token configured' },
+    { status: 'timeout', expected: 'request timeout' },
+    { status: 'network_error', expected: 'network error' },
+    { status: 'unauthorized', expected: 'unauthorized' },
+    { status: 'forbidden', expected: 'forbidden' },
+    { status: 'client_error', expected: 'client error' },
+    { status: 'server_error', expected: 'server error' },
+    { status: 'invalid_response', expected: 'invalid response' },
+  ];
+
+  for (const { status, expected } of errorCases) {
+    const output = renderStatusOutput({
+      stdin: { model: { display_name: 'GLM-4.5' } },
+      snapshot: { status },
+      provider: { isGlm: true },
+      branch: 'main',
+    });
+
+    const plain = stripAnsi(output);
+    assert.ok(
+      plain.includes(expected),
+      `status ${status} should show "${expected}" but got: ${plain}`
+    );
+  }
 });
