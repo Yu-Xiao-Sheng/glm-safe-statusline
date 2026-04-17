@@ -19,16 +19,30 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
   const planLevel = String(payload.level || 'unknown').toLowerCase();
   const tokenLimit = limits.find((item) => item.type === 'TOKENS_LIMIT') || {};
   const timeLimit = limits.find((item) => item.type === 'TIME_LIMIT') || {};
-  const total = quotaByLevel[planLevel] || null;
-  const remaining = total === null ? null : Math.max(0, total - Number(timeLimit.usage || 0));
+
+  // Use actual remaining from API response, or calculate from hardcoded quota
+  let mcpRemaining = null;
+  let mcpTotal = null;
+
+  if (timeLimit.remaining !== undefined && timeLimit.remaining !== null) {
+    // API provides actual remaining value
+    mcpRemaining = Number(timeLimit.remaining);
+    // Calculate total from usage + remaining
+    const usage = Number(timeLimit.usage || 0);
+    mcpTotal = mcpRemaining + usage;
+  } else {
+    // Fallback to hardcoded quota
+    mcpTotal = quotaByLevel[planLevel] || null;
+    mcpRemaining = mcpTotal === null ? null : Math.max(0, mcpTotal - Number(timeLimit.usage || 0));
+  }
 
   return sanitizeSnapshot({
     status: 'fresh',
     plan_level: planLevel,
     token_usage_pct: tokenLimit.percentage,
     token_reset_at: tokenLimit.nextResetTime,
-    mcp_remaining: remaining,
-    mcp_total: total,
+    mcp_remaining: mcpRemaining,
+    mcp_total: mcpTotal,
     snapshot_age_ms: now() - fetchedAt,
     fetched_at: fetchedAt,
   });
