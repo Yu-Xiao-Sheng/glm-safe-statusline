@@ -64,6 +64,7 @@ test('sanitizeSnapshot validates the public bridge schema', () => {
     token_reset_at: 1776304080000,
     mcp_remaining: 680,
     mcp_total: 1000,
+    mcp_reset_at: null,
     snapshot_age_ms: 14000,
     fetched_at: 1776297280000,
   });

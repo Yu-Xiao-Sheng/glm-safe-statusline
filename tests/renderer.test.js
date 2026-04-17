@@ -84,6 +84,7 @@ test('renderStatusLine renders the telemetry rail for a fresh GLM snapshot', asy
       token_reset_at: 1776304080000,
       mcp_remaining: 680,
       mcp_total: 1000,
+      mcp_reset_at: 1778897401997,
       snapshot_age_ms: 14000,
       fetched_at: 1776297280000,
     }),
@@ -99,7 +100,7 @@ test('renderStatusLine renders the telemetry rail for a fresh GLM snapshot', asy
   assert.match(plain, /PRO/);
   assert.match(plain, /MCP/);
   assert.match(plain, /680\/1000/);
-  assert.match(plain, /fresh 14s/);
+  assert.match(plain, /reset \d+d/);
 });
 
 test('renderStatusLine shows freshness hint for stale bridge data', async () => {
@@ -128,13 +129,14 @@ test('renderStatusLine shows freshness hint for stale bridge data', async () => 
       token_reset_at: 1776304080000,
       mcp_remaining: 3200,
       mcp_total: 4000,
+      mcp_reset_at: 1778897401997,
       snapshot_age_ms: 120000,
       fetched_at: 1776297280000,
     }),
   });
 
   const plain = stripAnsi(output);
-  assert.match(plain, /stale 2m/);
+  assert.match(plain, /reset \d+d/);
   assert.match(plain, /3200\/4000/);
 });
 

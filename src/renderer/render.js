@@ -51,9 +51,15 @@ function formatDuration(ms) {
     return `${totalMinutes}m`;
   }
 
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}h${minutes}m`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    const minutes = totalMinutes % 60;
+    return `${totalHours}h${minutes}m`;
+  }
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return `${days}d${hours}h`;
 }
 
 function formatFreshness(snapshot) {
@@ -163,6 +169,7 @@ function renderStatusOutput(options) {
       const mcpText = snapshot.mcp_total
         ? `${snapshot.mcp_remaining}/${snapshot.mcp_total}`
         : '--';
+      const mcpResetMs = Number(snapshot.mcp_reset_at || 0) - now();
 
       lines.push(
         `TOKEN 5H | ${makeBar(tokenPct)} | ${colorize(railColor, `${tokenPct}%`)}`,
@@ -171,7 +178,7 @@ function renderStatusOutput(options) {
         `PLAN     | ${colorize(MAGENTA, planLevel)} | ${colorize(YELLOW, `reset ${formatDuration(resetMs)}`)}`,
       );
       lines.push(
-        `MCP      | ${colorize(GREEN, mcpText)}${freshness ? ` | ${colorize(GRAY, freshness)}` : ''}`,
+        `MCP      | ${colorize(GREEN, mcpText)} | ${colorize(GRAY, `reset ${formatDuration(mcpResetMs)}`)}`,
       );
     }
   }

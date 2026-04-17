@@ -37,6 +37,7 @@ function sanitizeSnapshot(input = {}) {
     token_reset_at: toNullableInteger(input.token_reset_at, 'token_reset_at'),
     mcp_remaining: toNullableInteger(input.mcp_remaining, 'mcp_remaining'),
     mcp_total: toNullableInteger(input.mcp_total, 'mcp_total'),
+    mcp_reset_at: toNullableInteger(input.mcp_reset_at, 'mcp_reset_at'),
     snapshot_age_ms: toNullableInteger(input.snapshot_age_ms, 'snapshot_age_ms'),
     fetched_at: toNullableInteger(input.fetched_at, 'fetched_at'),
   };

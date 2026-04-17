@@ -20,20 +20,19 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
   const tokenLimit = limits.find((item) => item.type === 'TOKENS_LIMIT') || {};
   const timeLimit = limits.find((item) => item.type === 'TIME_LIMIT') || {};
 
-  // Use actual remaining from API response, or calculate from hardcoded quota
+  // Use actual values from API response
+  // API fields: usage = total quota, currentValue = used, remaining = left
   let mcpRemaining = null;
   let mcpTotal = null;
 
-  if (timeLimit.remaining !== undefined && timeLimit.remaining !== null) {
-    // API provides actual remaining value
-    mcpRemaining = Number(timeLimit.remaining);
-    // Calculate total from usage + remaining
-    const usage = Number(timeLimit.usage || 0);
-    mcpTotal = mcpRemaining + usage;
+  if (timeLimit.usage !== undefined && timeLimit.usage !== null) {
+    // API provides: usage=total quota, currentValue=used, remaining=left
+    mcpTotal = Number(timeLimit.usage);
+    mcpRemaining = Number(timeLimit.remaining || 0);
   } else {
     // Fallback to hardcoded quota
     mcpTotal = quotaByLevel[planLevel] || null;
-    mcpRemaining = mcpTotal === null ? null : Math.max(0, mcpTotal - Number(timeLimit.usage || 0));
+    mcpRemaining = mcpTotal === null ? null : Math.max(0, mcpTotal - Number(timeLimit.currentValue || 0));
   }
 
   return sanitizeSnapshot({
@@ -43,6 +42,7 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
     token_reset_at: tokenLimit.nextResetTime,
     mcp_remaining: mcpRemaining,
     mcp_total: mcpTotal,
+    mcp_reset_at: timeLimit.nextResetTime,
     snapshot_age_ms: now() - fetchedAt,
     fetched_at: fetchedAt,
   });
