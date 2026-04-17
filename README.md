@@ -73,7 +73,7 @@ npm link
 GLM-4.5 | CTX 34% | 218.0 t/s
 TOKEN 5H | █████░░░ | 62%
 PLAN     | PRO | reset 1h53m
-MCP      | 968/1968 | fresh 14s
+MCP      | 968/1000 | reset 28d23h
 my-project | main
 ```
 
