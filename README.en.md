@@ -8,7 +8,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[简体中文](README.zh-CN.md) | English
+[简体中文](README.md) | English
 
 </div>
 
