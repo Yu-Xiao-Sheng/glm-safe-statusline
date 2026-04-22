@@ -92,6 +92,24 @@ async function renderStatusLine(options = {}) {
         snapshot = await (options.fetchQuotaSnapshot || fetchQuotaSnapshot)({
           authToken: apiKey,
           requestTimeoutMs: 3000,
+          provider: 'glm',
+        });
+      } catch (error) {
+        snapshot = { status: mapErrorToStatus(error) };
+      }
+    }
+  } else if (provider.isMinimax) {
+    const claudeSettings = getClaudeSettings();
+    const apiKey = claudeSettings.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      snapshot = { status: SNAPSHOT_STATUS.NO_TOKEN };
+    } else {
+      try {
+        snapshot = await (options.fetchQuotaSnapshot || fetchQuotaSnapshot)({
+          authToken: apiKey,
+          requestTimeoutMs: 3000,
+          provider: 'minimax',
         });
       } catch (error) {
         snapshot = { status: mapErrorToStatus(error) };
