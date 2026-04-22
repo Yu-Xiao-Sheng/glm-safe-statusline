@@ -5,7 +5,7 @@ INSTALL_DIR="$HOME/.local/share/glm-safe-statusline"
 BIN_DIR="$HOME/.local/bin"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
-echo "Installing GLM Safe StatusLine..."
+echo "Installing Domestic AI StatusLine (GLM/MiniMax)..."
 
 # Create directories
 mkdir -p "$INSTALL_DIR"
@@ -58,4 +58,4 @@ echo "Installation complete!"
 echo "Status line command: $BIN_DIR/glm-safe-statusline"
 echo ""
 echo "Note: The status line reads ANTHROPIC_AUTH_TOKEN from ~/.claude/settings.json"
-echo "      This should be automatically available when using GLM in Claude Code"
+echo "      This should be automatically available when using GLM or MiniMax in Claude Code"
