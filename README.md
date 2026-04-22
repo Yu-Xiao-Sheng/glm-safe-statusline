@@ -1,8 +1,8 @@
 <div align="center">
 
-# GLM Direct StatusLine
+# 国产 AI StatusLine
 
-**轻量级的 Claude Code 状态栏，用于 GLM 配额监控**
+**Claude Code 状态栏，支持 GLM/MiniMax 配额监控**
 
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
@@ -21,6 +21,7 @@
 - 🎯 **智能令牌检测** - 自动从 Claude 设置中读取
 - 🛡️ **错误处理** - 清晰的错误信息便于排查
 - ✅ **测试完善** - 全面的测试覆盖
+- 🔄 **双提供商支持** - 同时支持 GLM 和 MiniMax
 
 ## 📦 安装
 
@@ -47,7 +48,11 @@ npm link
 
 ## ⚙️ 配置
 
-状态栏会自动从以下位置检测你的 GLM 令牌：
+状态栏会自动检测并支持 GLM 和 MiniMax 两种提供商：
+
+### GLM 配置
+
+自动从以下位置检测你的 GLM 令牌：
 
 1. **`~/.claude/settings.json`**（优先）
    ```json
@@ -63,7 +68,11 @@ npm link
    export ANTHROPIC_API_KEY="your-token-here"
    ```
 
-使用 Claude Code 配置 GLM 时无需额外配置！
+### MiniMax 配置
+
+MiniMax 同样自动检测，无需额外配置！
+
+使用 Claude Code 配置 GLM 或 MiniMax 时无需额外配置！
 
 ## 📊 输出示例
 
@@ -85,7 +94,15 @@ QUOTA    | no token configured
 my-project | main
 ```
 
-### 非 GLM 运行时
+### MiniMax 运行时 - 正常状态
+
+```
+MiniMax-M* | CTX 34% | 218.0 t/s
+QUOTA      | █░░░░░░░░░ | 13% | 1h16m
+my-project | main
+```
+
+### 非 GLM/MiniMax 运行时
 
 ```
 claude-sonnet-4-6 | CTX 42% | 400.0 t/s
@@ -94,16 +111,16 @@ my-project | main
 
 ## 🔧 故障排除
 
-| 错误信息 | 原因 | 解决方案 |
-|---------------|-------|----------|
-| `no token configured` | 未找到令牌 | 检查 `~/.claude/settings.json` 或设置 `ANTHROPIC_API_KEY` |
-| `network error` | 无法连接 GLM API | 检查网络连接 |
-| `request timeout` | API 请求超时（3秒） | 稍后重试，API 可能响应较慢 |
-| `unauthorized` | 令牌无效（401） | 验证令牌是否正确 |
-| `forbidden` | 令牌缺少权限（403） | 检查令牌权限 |
-| `client error` | 其他 4xx 错误 | 检查 API 端点配置 |
-| `server error` | GLM API 故障（5xx） | 等待后重试 |
-| `invalid response` | 响应解析失败 | API 可能已更新，请报告问题 |
+| 错误信息 | 原因 | 解决方案 | 适用提供商 |
+|---------------|-------|----------|------------|
+| `no token configured` | 未找到令牌 | 检查 `~/.claude/settings.json` 或设置 `ANTHROPIC_API_KEY` | GLM/MiniMax |
+| `network error` | 无法连接 API | 检查网络连接 | GLM/MiniMax |
+| `request timeout` | API 请求超时（3秒） | 稍后重试，API 可能响应较慢 | GLM/MiniMax |
+| `unauthorized` | 令牌无效（401） | 验证令牌是否正确 | GLM/MiniMax |
+| `forbidden` | 令牌缺少权限（403） | 检查令牌权限 | GLM/MiniMax |
+| `client error` | 其他 4xx 错误 | 检查 API 端点配置 | GLM/MiniMax |
+| `server error` | API 故障（5xx） | 等待后重试 | GLM/MiniMax |
+| `invalid response` | 响应解析失败 | API 可能已更新，请报告问题 | GLM/MiniMax |
 
 ## 🧪 测试
 
@@ -133,7 +150,9 @@ tests/
 ## 📝 技术细节
 
 - **运行环境**: Node.js ≥ 18.0.0
-- **API 端点**: `https://open.bigmodel.cn/api/monitor/usage/quota/limit`
+- **API 端点**:
+  - GLM: `https://open.bigmodel.cn/api/monitor/usage/quota/limit`
+  - MiniMax: `https://api.minimaxi.chat/v1/usage/quota_info`
 - **请求超时**: 3 秒
 - **状态栏接口**: Claude Code `statusLine` 命令类型
 
@@ -153,7 +172,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件。
 
 ## 🙏 致谢
 
-为 Claude Code 社区构建，使用 GLM API。
+为 Claude Code 社区构建，使用 GLM/MiniMax API。
 
 ---
 
