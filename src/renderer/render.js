@@ -151,11 +151,12 @@ function renderStatusOutput(options) {
     lines.push(baseParts.join(colorize(GRAY, ' | ')));
   }
 
+  const errorStatuses = [
+    'no_token', 'timeout', 'network_error', 'unauthorized',
+    'forbidden', 'client_error', 'server_error', 'invalid_response',
+  ];
+
   if (provider.isGlm) {
-    const errorStatuses = [
-      'no_token', 'timeout', 'network_error', 'unauthorized',
-      'forbidden', 'client_error', 'server_error', 'invalid_response',
-    ];
 
     if (!snapshot || snapshot.status === 'unavailable' || errorStatuses.includes(snapshot.status)) {
       const errorMsg = snapshot ? getErrorMessage(snapshot) : 'quota unavailable';
@@ -179,6 +180,19 @@ function renderStatusOutput(options) {
       );
       lines.push(
         `MCP      | ${colorize(GREEN, mcpText)} | ${colorize(GRAY, `reset ${formatDuration(mcpResetMs)}`)}`,
+      );
+    }
+  } else if (provider.isMinimax) {
+    if (!snapshot || snapshot.status === 'unavailable' || errorStatuses.includes(snapshot.status)) {
+      const errorMsg = snapshot ? getErrorMessage(snapshot) : 'quota unavailable';
+      lines.push(colorize(RED, `QUOTA    | ${errorMsg}`));
+    } else {
+      const tokenPct = snapshot.token_usage_pct ?? 0;
+      const railColor = colorForPercentage(tokenPct);
+      const resetMs = Number(snapshot.token_reset_at || 0) - now();
+
+      lines.push(
+        `QUOTA    | ${makeBar(tokenPct)} | ${colorize(railColor, `${tokenPct}%`)} | ${colorize(YELLOW, formatDuration(resetMs))}`
       );
     }
   }
