@@ -3,6 +3,7 @@ const https = require('node:https');
 const { sanitizeSnapshot } = require('../shared/schema');
 
 const DEFAULT_QUOTA_ENDPOINT = 'https://open.bigmodel.cn/api/monitor/usage/quota/limit';
+const DEFAULT_MINIMAX_ENDPOINT = 'https://www.minimaxi.com/v1/token_plan/remains';
 const DEFAULT_REQUEST_TIMEOUT_MS = 3 * 1000;
 
 const DEFAULT_QUOTA_BY_LEVEL = {
@@ -48,12 +49,45 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
   });
 }
 
+function mapMinimaxResponseToSnapshot(payload = {}, options = {}) {
+  const now = options.now || Date.now;
+  const fetchedAt = options.fetchedAt || now();
+  const modelRemains = Array.isArray(payload.model_remains) ? payload.model_remains : [];
+
+  const mainModel = modelRemains.find(m => m.model_name && m.model_name.includes('MiniMax-M'))
+    || modelRemains[0]
+    || {};
+
+  const total = Number(mainModel.current_interval_total_count || 0);
+  const usage = Number(mainModel.current_interval_usage_count || 0);
+  const remainsTime = Number(mainModel.remains_time || 0);
+
+  const tokenUsagePct = total > 0 ? Math.round((usage / total) * 100) : 0;
+  const tokenResetAt = remainsTime > 0 ? now() + remainsTime : null;
+
+  return sanitizeSnapshot({
+    status: 'fresh',
+    plan_level: 'unknown',
+    token_usage_pct: tokenUsagePct,
+    token_reset_at: tokenResetAt,
+    mcp_remaining: null,
+    mcp_total: null,
+    mcp_reset_at: null,
+    snapshot_age_ms: now() - fetchedAt,
+    fetched_at: fetchedAt,
+  });
+}
+
 function fetchQuotaSnapshot(config, options = {}) {
   const transport = options.transport || https;
   const now = options.now || Date.now;
+  const provider = config.provider || 'glm';
 
   return new Promise((resolve, reject) => {
-    const quotaEndpoint = config.quotaEndpoint || DEFAULT_QUOTA_ENDPOINT;
+    const isMinimax = provider === 'minimax';
+    const quotaEndpoint = isMinimax
+      ? (config.quotaEndpoint || DEFAULT_MINIMAX_ENDPOINT)
+      : (config.quotaEndpoint || DEFAULT_QUOTA_ENDPOINT);
     const authToken = config.authToken;
 
     if (!authToken) {
@@ -61,14 +95,20 @@ function fetchQuotaSnapshot(config, options = {}) {
       return;
     }
 
-    const req = transport.get(quotaEndpoint, {
-      headers: {
-        // GLM API expects token directly without Bearer prefix
-        Authorization: authToken,
-        Accept: 'application/json',
-        'Accept-Language': 'en-US,en',
-      },
-    }, (res) => {
+    const headers = {
+      Accept: 'application/json',
+      'Accept-Language': 'en-US,en',
+    };
+
+    if (isMinimax) {
+      // MiniMax API expects Bearer token
+      headers.Authorization = `Bearer ${authToken}`;
+    } else {
+      // GLM API expects token directly without Bearer prefix
+      headers.Authorization = authToken;
+    }
+
+    const req = transport.get(quotaEndpoint, { headers }, (res) => {
       let body = '';
 
       res.setEncoding('utf8');
@@ -78,15 +118,28 @@ function fetchQuotaSnapshot(config, options = {}) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(body);
-          if (parsed.code !== 200 || !parsed.data) {
-            reject(new Error(`API_ERROR_${res.statusCode}`));
-            return;
-          }
 
-          resolve(mapQuotaResponseToSnapshot(parsed.data, {
-            fetchedAt: now(),
-            now,
-          }));
+          if (isMinimax) {
+            // MiniMax error check: base_resp.status_code !== 0
+            if (parsed.base_resp && parsed.base_resp.status_code !== 0) {
+              reject(new Error(`API_ERROR_${res.statusCode}`));
+              return;
+            }
+            resolve(mapMinimaxResponseToSnapshot(parsed, {
+              fetchedAt: now(),
+              now,
+            }));
+          } else {
+            // GLM error check
+            if (parsed.code !== 200 || !parsed.data) {
+              reject(new Error(`API_ERROR_${res.statusCode}`));
+              return;
+            }
+            resolve(mapQuotaResponseToSnapshot(parsed.data, {
+              fetchedAt: now(),
+              now,
+            }));
+          }
         } catch (error) {
           reject(new Error('INVALID_RESPONSE'));
         }
@@ -109,8 +162,10 @@ function fetchQuotaSnapshot(config, options = {}) {
 
 module.exports = {
   DEFAULT_QUOTA_ENDPOINT,
+  DEFAULT_MINIMAX_ENDPOINT,
   DEFAULT_REQUEST_TIMEOUT_MS,
   DEFAULT_QUOTA_BY_LEVEL,
   fetchQuotaSnapshot,
   mapQuotaResponseToSnapshot,
+  mapMinimaxResponseToSnapshot,
 };
