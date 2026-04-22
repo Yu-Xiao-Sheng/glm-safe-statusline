@@ -23,6 +23,7 @@ test('detectProviderRuntime recognizes GLM runtime context', () => {
 
   assert.deepEqual(result, {
     isGlm: true,
+    isMinimax: false,
     provider: 'glm',
   });
 });
@@ -38,6 +39,7 @@ test('detectProviderRuntime keeps non-GLM runtime on the base path', () => {
 
   assert.deepEqual(result, {
     isGlm: false,
+    isMinimax: false,
     provider: 'unknown',
   });
 });
