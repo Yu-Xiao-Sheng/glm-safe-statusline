@@ -82,6 +82,8 @@ test('renderStatusLine renders the telemetry rail for a fresh GLM snapshot', asy
       plan_level: 'pro',
       token_usage_pct: 62,
       token_reset_at: 1776304080000,
+      weekly_token_usage_pct: 15,
+      weekly_token_reset_at: 1778897401997,
       mcp_remaining: 680,
       mcp_total: 1000,
       mcp_reset_at: 1778897401997,
@@ -96,6 +98,8 @@ test('renderStatusLine renders the telemetry rail for a fresh GLM snapshot', asy
   assert.match(plain, /218\.0 t\/s/);
   assert.match(plain, /TOKEN 5H/);
   assert.match(plain, /62%/);
+  assert.match(plain, /WEEKLY/);
+  assert.match(plain, /15%/);
   assert.match(plain, /PLAN/);
   assert.match(plain, /PRO/);
   assert.match(plain, /MCP/);
@@ -127,6 +131,8 @@ test('renderStatusLine shows freshness hint for stale bridge data', async () => 
       plan_level: 'max',
       token_usage_pct: 80,
       token_reset_at: 1776304080000,
+      weekly_token_usage_pct: 30,
+      weekly_token_reset_at: 1778897401997,
       mcp_remaining: 3200,
       mcp_total: 4000,
       mcp_reset_at: 1778897401997,

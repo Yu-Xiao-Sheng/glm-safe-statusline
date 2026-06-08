@@ -171,10 +171,18 @@ function renderStatusOutput(options) {
         ? `${snapshot.mcp_remaining}/${snapshot.mcp_total}`
         : '--';
       const mcpResetMs = Number(snapshot.mcp_reset_at || 0) - now();
+      const weeklyPct = snapshot.weekly_token_usage_pct ?? 0;
+      const weeklyColor = colorForPercentage(weeklyPct);
+      const weeklyResetMs = Number(snapshot.weekly_token_reset_at || 0) - now();
 
       lines.push(
         `TOKEN 5H | ${makeBar(tokenPct)} | ${colorize(railColor, `${tokenPct}%`)}`,
       );
+      if (snapshot.weekly_token_usage_pct !== null && snapshot.weekly_token_usage_pct !== undefined) {
+        lines.push(
+          `WEEKLY   | ${makeBar(weeklyPct)} | ${colorize(weeklyColor, `${weeklyPct}%`)} | ${colorize(YELLOW, `reset ${formatDuration(weeklyResetMs)}`)}`,
+        );
+      }
       lines.push(
         `PLAN     | ${colorize(MAGENTA, planLevel)} | ${colorize(YELLOW, `reset ${formatDuration(resetMs)}`)}`,
       );

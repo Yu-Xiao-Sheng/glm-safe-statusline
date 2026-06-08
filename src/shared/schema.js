@@ -30,11 +30,14 @@ function sanitizeSnapshot(input = {}) {
   }
 
   const tokenUsage = toNullableInteger(input.token_usage_pct, 'token_usage_pct');
+  const weeklyTokenUsage = toNullableInteger(input.weekly_token_usage_pct, 'weekly_token_usage_pct');
   const snapshot = {
     status,
     plan_level: normalizePlanLevel(input.plan_level),
     token_usage_pct: tokenUsage === null ? null : Math.max(0, Math.min(100, tokenUsage)),
     token_reset_at: toNullableInteger(input.token_reset_at, 'token_reset_at'),
+    weekly_token_usage_pct: weeklyTokenUsage === null ? null : Math.max(0, Math.min(100, weeklyTokenUsage)),
+    weekly_token_reset_at: toNullableInteger(input.weekly_token_reset_at, 'weekly_token_reset_at'),
     mcp_remaining: toNullableInteger(input.mcp_remaining, 'mcp_remaining'),
     mcp_total: toNullableInteger(input.mcp_total, 'mcp_total'),
     mcp_reset_at: toNullableInteger(input.mcp_reset_at, 'mcp_reset_at'),

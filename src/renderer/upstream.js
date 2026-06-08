@@ -18,7 +18,9 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
   const fetchedAt = options.fetchedAt || now();
   const limits = Array.isArray(payload.limits) ? payload.limits : [];
   const planLevel = String(payload.level || 'unknown').toLowerCase();
-  const tokenLimit = limits.find((item) => item.type === 'TOKENS_LIMIT') || {};
+  const tokensLimits = limits.filter((item) => item.type === 'TOKENS_LIMIT');
+  const tokenLimit = tokensLimits.find((item) => item.unit === 3) || tokensLimits[0] || {};
+  const weeklyLimit = tokensLimits.find((item) => item.unit === 6) || {};
   const timeLimit = limits.find((item) => item.type === 'TIME_LIMIT') || {};
 
   // Use actual values from API response
@@ -41,6 +43,8 @@ function mapQuotaResponseToSnapshot(payload = {}, options = {}) {
     plan_level: planLevel,
     token_usage_pct: tokenLimit.percentage,
     token_reset_at: tokenLimit.nextResetTime,
+    weekly_token_usage_pct: weeklyLimit.percentage,
+    weekly_token_reset_at: weeklyLimit.nextResetTime,
     mcp_remaining: mcpRemaining,
     mcp_total: mcpTotal,
     mcp_reset_at: timeLimit.nextResetTime,
